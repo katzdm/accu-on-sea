@@ -8,8 +8,8 @@
 int main() {
   MyCls m;
 
-  std::println("dump m: {}", univ::dump(m));
+  std::println("dump (client): {}", univ::dump(m));
   MyCls::privileged_print(m);
 
-  std::println("\nformatter: {}", m);
+  std::println("\nformatter (client): {}", m);
 }

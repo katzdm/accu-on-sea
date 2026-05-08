@@ -20,4 +20,8 @@ public:
 template <> struct std::formatter<MyCls> : univ::formatter { };
 template <> struct std::formatter<MyCls::impl_t> : univ::formatter { };
 
+extern template
+univ::formatter::format_impl_t<MyCls::impl_t> univ::formatter::format_impl;
+
+
 #endif
