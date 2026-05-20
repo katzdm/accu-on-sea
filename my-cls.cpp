@@ -13,5 +13,4 @@ void MyCls::privileged_print(const MyCls &m) {
     std::println("dump (impl): {}", univ::dump(m));
 }
 
-template
-univ::formatter::format_impl_t<MyCls::impl_t> univ::formatter::format_impl;
+template univ::formatter::format_t<MyCls::impl_t> univ::formatter::format;

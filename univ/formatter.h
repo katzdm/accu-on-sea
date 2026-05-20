@@ -1,92 +1,183 @@
 #ifndef UNIV_FORMATTER_H_
 #define UNIV_FORMATTER_H_
 
+#include <algorithm>
 #include <format>
 #include <meta>
 #include <ranges>
 
 
 namespace univ {
-struct formatter {
-  struct writer {
-    void *out;
-    void(*cb)(void *, std::string_view);
 
-    template <typename T>
-    writer(T *out) : out(out), cb(write_callback<T>) { }
+struct formatter;
 
-    void operator()(std::string_view blob) {
-      cb(out, blob);
-    }
+namespace detail {
 
-  private:
-    template <typename T>
-    static void write_callback(void *out, std::string_view blob) {
-      *(static_cast<T *>(out)) = blob;
-    }
+struct Subobject {
+  std::meta::info Info;
+  size_t          Offset;
+};
+
+constexpr auto access_cx = std::meta::access_context::unchecked();
+
+consteval bool is_universally_formattable(std::meta::info Ty) {
+  return std::ranges::any_of(
+      bases_of(substitute(^^std::formatter, {Ty}), access_cx),
+      [](std::meta::info b) { return type_of(b) == ^^univ::formatter; });
+}
+
+consteval std::vector<Subobject> get_nested_objects(size_t offset,
+                                                    std::meta::info Ty) {
+  std::vector<Subobject> result;
+  auto add_directly = [&result, offset](std::meta::info so) {
+    result.push_back({so, offset + offset_of(so).bytes});
+  };
+  auto add_recursive_subobjects = [&](std::meta::info so) {
+    result.insert_range(result.end(),
+                        get_nested_objects(offset + offset_of(so).bytes,
+                                           type_of(so)));
   };
 
-  constexpr auto parse(auto& ctx) { return ctx.begin(); }
+  for (auto so : subobjects_of(Ty, access_cx)) {
+    if (is_universally_formattable(type_of(so)))
+      add_recursive_subobjects(so);
+    else
+      add_directly(so);
+  }
 
-  template <typename ObjT>
-  void format_impl(const ObjT &o, writer &w) const {
-    auto identifier_of_or = [](std::meta::info R, std::string_view alt) {
-      return has_identifier(R) ? identifier_of(R) : alt;
+  return result;
+}
+
+consteval std::string format_string(std::meta::info ObjTy) {
+  // HELPER LAMBDAS
+
+  auto join = [](auto... ps) -> std::string {
+    return std::string {
+        std::from_range,
+        std::views::join(std::vector<std::string_view>{ps...})
     };
+  };
 
-    if constexpr (is_pointer_type(^^ObjT)) {
-      w(std::format("&{}", *o));
-    } else if constexpr (!is_class_type(^^ObjT)) {
-      w(std::format("{}", o));
-    } else if constexpr (!is_complete_type(^^ObjT)) {
-        w(std::format("incomplete {}",
-                       identifier_of_or(^^ObjT, "(unnamed-type)")));
-    } else {
-      w(std::format("{}{{ ", identifier_of_or(^^ObjT, "(unnamed-type)")));
-      auto write_separator = [first=true, &w]() mutable {
-        if (first)
-          first = false;
-        else
-          w(", ");
-      };
+  auto label_of = [](std::meta::info so) {
+    if (is_base(so)) so = type_of(so);
 
-      constexpr auto cx = std::meta::access_context::unchecked();
-      template for (constexpr auto base :
-                    define_static_array(bases_of(^^ObjT, cx))) {
-        write_separator();
-        w(std::format("{}", (const typename [: type_of(base) :] &)(o)));
-      }
+    if (is_type(so))
+      return has_identifier(so) ? identifier_of(so) : "(unnamed-type)";
+    else
+      return has_identifier(so) ? identifier_of(so) :
+                                  is_bit_field(so) ? "(unnamed-bitfield)"
+                                                   : "(unnamed-member)";
+  };
 
-      template for (constexpr auto mem :
-                    define_static_array(nonstatic_data_members_of(^^ObjT,
-                                                                  cx))) {
-        write_separator();
-        if constexpr (is_bit_field(mem) && !has_identifier(mem)) {
-            w("(unnamed-bitfield)");
-        } else {
-          w(std::format(".{}=", identifier_of_or(mem, "(unnamed-member)")));
-          if constexpr (is_pointer_type(type_of(mem)))
-            format_impl(o.[:mem:], w);
+  auto delim = [m=true]() mutable { return m ? (m = false, "") : ", "; };
+
+  // IMPLEMENTATION
+
+  std::string result;
+  auto affix = [&result, join](auto... ps) -> void {
+    std::ranges::copy(join(ps...),
+                      std::back_inserter(result));
+  };
+
+  if (dealias(ObjTy) == dealias(^^std::string)) {
+    affix(R"("|")");
+  } else if (is_pointer_type(ObjTy)) {
+    affix("&", format_string(remove_pointer(ObjTy)));
+  } else if (!is_universally_formattable(ObjTy) ||
+             !is_complete_type(ObjTy)) {
+    affix("|");
+  } else {
+    affix(label_of(ObjTy), "{");
+
+    std::string suffix;
+    if (is_class_type(ObjTy) && is_complete_type(ObjTy)) {
+      for (auto so : subobjects_of(ObjTy, access_cx)) {
+        if (is_base(so)) {
+          if (is_universally_formattable(type_of(so)))
+            affix(delim(), format_string(type_of(so)));
           else
-            w(std::format("{}", o.[:mem:]));
+            affix("|");
+        } else {
+          affix(delim(), ".", label_of(so), "=", format_string(type_of(so)));
         }
       }
-      w(" }");
+      affix("}");
     }
   }
 
-  template <typename ObjT>
-  using format_impl_t = void(const ObjT &, writer &) const;
+  return result;
+}
 
-  template <typename T>
-  auto format(const T &o, auto& ctx) const {
-    auto out = ctx.out();
-    writer w{&out};
+template <typename ObjT, typename CtxT>
+consteval std::meta::info get_format_impl_r() {
+  static constexpr std::span fixed_parts = std::define_static_array(
+      format_string(^^ObjT) |
+      std::views::split('|') |
+      std::views::transform(
+          [](auto piece) { return std::define_static_string(piece); }));
 
-    format_impl<T>(o, w);
+  // Generic lambda forms a template for the printer.
+  constexpr auto tmpl = []<Subobject... Subobjs>(const ObjT& obj,
+                                                 CtxT &cx) static {
+    auto out = cx.out();
+
+    out = fixed_parts[0];
+    template for (constexpr size_t k :
+                  std::views::iota(0u, sizeof...(Subobjs))) {
+      constexpr std::meta::info nso_info = Subobjs...[k].Info;
+      constexpr size_t nso_offset = Subobjs...[k].Offset;
+      using SubobjTy = [:type_of(nso_info):];
+      const SubobjTy &so = reinterpret_cast<const SubobjTy &>(
+          *(reinterpret_cast<const char *>(&obj) + nso_offset));
+
+      if constexpr (is_pointer_type(^^SubobjTy)) {
+        using pointee_t = std::remove_pointer_t<SubobjTy>;
+        constexpr typename std::formatter<pointee_t>::formatter formatter;
+        formatter.format(*so, cx);
+      } else {
+        constexpr typename std::formatter<SubobjTy>::formatter formatter;
+        formatter.format(so, cx);
+      }
+      out = fixed_parts[k + 1];
+    }
     return out;
-  }
+  };
+
+  // Substitute subobject reflections into 'tmpl' and return the result.
+  return substitute(^^decltype(tmpl)::template operator(),
+                    get_nested_objects(0, ^^ObjT) |
+                        std::views::transform(
+                            std::meta::reflect_constant<Subobject>));
 };
+
+
+}  // namespace detail
+
+struct formatter {
+  constexpr auto parse(auto& cx) { return cx.begin(); }
+
+  template <typename ObjT, typename CtxT>
+  CtxT::iterator format(const ObjT& obj, CtxT& cx) const;
+
+  template <typename ObjT>
+  using format_t = std::format_context::iterator(const ObjT &,
+                                                 std::format_context &) const;
+};
+
+// Define out-of-line to prevent specializations from being inline.
+// Otherwise, declarations of explicit instantations won't suffice to make the
+// function a declared specialization, and it will still be subject to implicit
+// instantiation.
+//
+// It pays to be friends with Daveed.
+template <typename ObjT, typename CtxT>
+CtxT::iterator formatter::format(const ObjT& obj, CtxT& cx) const {
+  using namespace ::univ::detail;
+
+  static constexpr auto format_impl = &[:get_format_impl_r<ObjT, CtxT>():];
+  return format_impl(obj, cx);
+}
+
 }  // namespace univ
 
 

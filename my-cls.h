@@ -7,7 +7,6 @@
 
 
 class MyCls {
-private:
   struct impl_t;
   impl_t *impl;
 
@@ -21,7 +20,6 @@ template <> struct std::formatter<MyCls> : univ::formatter { };
 template <> struct std::formatter<MyCls::impl_t> : univ::formatter { };
 
 extern template
-univ::formatter::format_impl_t<MyCls::impl_t> univ::formatter::format_impl;
-
+univ::formatter::format_t<MyCls::impl_t> univ::formatter::format;
 
 #endif
