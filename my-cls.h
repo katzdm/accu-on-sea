@@ -16,10 +16,16 @@ public:
   static void privileged_print(const MyCls &m);
 };
 
-template <> struct std::formatter<MyCls> : univ::formatter { };
-template <> struct std::formatter<MyCls::impl_t> : univ::formatter { };
+template <typename CharT>
+struct std::formatter<MyCls, CharT> : univ::formatter { };
+
+template <typename CharT>
+struct std::formatter<MyCls::impl_t, CharT> : univ::formatter { };
 
 extern template
 univ::formatter::format_t<MyCls::impl_t> univ::formatter::format;
 
-#endif
+extern template
+univ::formatter::wformat_t<MyCls::impl_t> univ::formatter::format;
+
+#endif  // MYCLS_H_

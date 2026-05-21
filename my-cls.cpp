@@ -14,3 +14,4 @@ void MyCls::privileged_print(const MyCls &m) {
 }
 
 template univ::formatter::format_t<MyCls::impl_t> univ::formatter::format;
+template univ::formatter::wformat_t<MyCls::impl_t> univ::formatter::format;

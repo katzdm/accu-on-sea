@@ -48,13 +48,24 @@ consteval std::vector<Subobject> get_nested_objects(size_t offset,
   return result;
 }
 
-consteval std::string format_string(std::meta::info ObjTy) {
+template <typename CharT>
+consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
+  static constexpr auto maybe_utf8 = [](auto input) consteval {
+    std::basic_string_view contents {input};
+
+    std::basic_string<CharT> result(contents.size(), 0);
+    for (size_t idx = 0; auto c : std::basic_string_view{contents})
+      result[idx++] = CharT{c};
+
+    return std::define_static_string(result);
+  };
+
   // HELPER LAMBDAS
 
-  auto join = [](auto... ps) -> std::string {
-    return std::string {
+  auto join = [](auto... ps) -> std::basic_string<CharT> {
+    return std::basic_string<CharT> {
         std::from_range,
-        std::views::join(std::vector<std::string_view>{ps...})
+        std::views::join(std::vector<std::basic_string_view<CharT>>{ps...})
     };
   };
 
@@ -73,32 +84,37 @@ consteval std::string format_string(std::meta::info ObjTy) {
 
   // IMPLEMENTATION
 
-  std::string result;
+  std::basic_string<CharT> result;
   auto affix = [&result, join](auto... ps) -> void {
-    std::ranges::copy(join(ps...),
+    std::ranges::copy(join(maybe_utf8(ps)...),
                       std::back_inserter(result));
   };
 
-  if (dealias(ObjTy) == dealias(^^std::string)) {
+  if (auto d = dealias(ObjTy);
+      has_template_arguments(d) && template_of(d) == ^^std::basic_string) {
     affix(R"("|")");
   } else if (is_pointer_type(ObjTy)) {
-    affix("&", format_string(remove_pointer(ObjTy)));
+    affix("&", format_string<CharT>(remove_pointer(ObjTy)));
   } else if (!is_universally_formattable(ObjTy) ||
              !is_complete_type(ObjTy)) {
     affix("|");
   } else {
     affix(label_of(ObjTy), "{");
 
-    std::string suffix;
+    std::basic_string<CharT> suffix;
     if (is_class_type(ObjTy) && is_complete_type(ObjTy)) {
       for (auto so : subobjects_of(ObjTy, access_cx)) {
         if (is_base(so)) {
           if (is_universally_formattable(type_of(so)))
-            affix(delim(), format_string(type_of(so)));
+            affix(delim(), format_string<CharT>(type_of(so)));
           else
             affix("|");
         } else {
-          affix(delim(), ".", label_of(so), "=", format_string(type_of(so)));
+          affix(delim(),
+                ".",
+                label_of(so),
+                "=",
+                format_string<CharT>(type_of(so)));
         }
       }
       affix("}");
@@ -111,8 +127,8 @@ consteval std::string format_string(std::meta::info ObjTy) {
 template <typename ObjT, typename CtxT>
 consteval std::meta::info get_format_impl_r() {
   static constexpr std::span fixed_parts = std::define_static_array(
-      format_string(^^ObjT) |
-      std::views::split('|') |
+      format_string<typename CtxT::char_type>(^^ObjT) |
+      std::views::split(typename CtxT::char_type{'|'}) |
       std::views::transform(
           [](auto piece) { return std::define_static_string(piece); }));
 
@@ -132,10 +148,14 @@ consteval std::meta::info get_format_impl_r() {
 
       if constexpr (is_pointer_type(^^SubobjTy)) {
         using pointee_t = std::remove_pointer_t<SubobjTy>;
-        constexpr typename std::formatter<pointee_t>::formatter formatter;
+        constexpr typename std::formatter<pointee_t,
+                                          typename CtxT::char_type>::formatter
+            formatter;
         formatter.format(*so, cx);
       } else {
-        constexpr typename std::formatter<SubobjTy>::formatter formatter;
+        constexpr typename std::formatter<SubobjTy,
+                                          typename CtxT::char_type>::formatter
+            formatter;
         formatter.format(so, cx);
       }
       out = fixed_parts[k + 1];
@@ -162,6 +182,10 @@ struct formatter {
   template <typename ObjT>
   using format_t = std::format_context::iterator(const ObjT &,
                                                  std::format_context &) const;
+
+  template <typename ObjT>
+  using wformat_t = std::wformat_context::iterator(const ObjT &,
+                                                   std::wformat_context &) const;
 };
 
 // Define out-of-line to prevent specializations from being inline.

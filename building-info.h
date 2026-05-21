@@ -1,5 +1,5 @@
-#ifndef _BUILDING_INFO_H_
-#define _BUILDING_INFO_H_
+#ifndef BUILDING_INFO_H_
+#define BUILDING_INFO_H_
 
 #include <string>
 
@@ -18,7 +18,10 @@ struct BuildingInfo : ObjectInfo {
   int year;
 };
 
-template <> struct std::formatter<ObjectInfo> : univ::formatter {};
-template <> struct std::formatter<BuildingInfo> : univ::formatter {};
+template <typename CharT>
+struct std::formatter<ObjectInfo, CharT> : univ::formatter {};
 
-#endif
+template <typename CharT>
+struct std::formatter<BuildingInfo, CharT> : univ::formatter {};
+
+#endif  // BUILDING_INFO_H_

@@ -1,27 +1,49 @@
+#include <clocale>
+#include <iostream>
 #include <print>
 
 #include "univ/dump.h"
 
 #include "building-info.h"
+#include "intl-address.h"
 #include "my-cls.h"
 
 
 int main() {
-  MyCls m;
+  setlocale(LC_CTYPE, "");
+  {
+    MyCls m;
 
-  std::println("dump (client): {}", univ::dump(m));
-  MyCls::privileged_print(m);
+    std::println("dump (client): {}", univ::dump(m));
+    MyCls::privileged_print(m);
 
-  std::println("\nformatter (client): {}", m);
+    std::println();
+    std::println("formatter (client): {}", m);
+  }
 
+  {
+    BuildingInfo esb {
+        .address = "350 Fifth Avenue",
+        .city    = "New York",
+        .zip     = 10001,
+        .phone   = 212'736'3100,
+        .year    = 1931,
+    };
+    esb.name = "Empire State Building";
 
-  BuildingInfo esb { };
-  esb.name    = "Empire State Building";
-  esb.address = "350 Fifth Avenue";
-  esb.city    = "New York";
-  esb.zip     = 10001;
-  esb.phone   = 212'736'3100;
-  esb.year    = 1931;
+    std::println();
+    std::println("ESB: {}", esb);
+  }
 
-  std::println("ESB: {}", esb);
+  {
+    IntlAddress addr {
+      .street       = L"Doctor Marañon Ibilbidea, 34",
+      .municipality = L"San Sebastián",
+      .country      = L"España",
+    };
+
+    std::println();
+    std::wstring rendered = std::format(L"Wide Address: {}", addr);
+    std::wprintf(L"%S\n", rendered.data());
+  }
 }
