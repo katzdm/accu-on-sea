@@ -1,6 +1,7 @@
 #ifndef UNIV_DUMP_H_
 #define UNIV_DUMP_H_
 
+// Standard C++ headers.
 #include <format>
 #include <meta>
 #include <ranges>
@@ -40,10 +41,12 @@ auto dump_to(auto &inserter, const T &o) -> void {
     return has_identifier(R) ? identifier_of(R) : alt;
   };
 
-  if constexpr (is_pointer_type(^^T)) {
+  if constexpr (is_reference_type(^^T)) {
+    dump_to<typename [:remove_reference(^^T):], Is>(inserter, o);
+  } else if constexpr (is_pointer_type(^^T)) {
     inserter = '&';
     dump_to<typename [:decay(^^decltype(*o)):], Is>(inserter, *o);
-  } else if constexpr (!is_class_type(^^T)) {
+  } else if constexpr (!is_class_type(^^T) && !is_union_type(^^T)) {
     std::format_to(inserter, "{}", o);
   } else if constexpr (!is_complete_type(^^T)) {
       std::format_to(inserter, "incomplete {}", identifier_of(^^T));
