@@ -6,6 +6,7 @@
 
 // Application headers.
 #include "univ/formatter.h"
+#include "univ/formatter-old.h"
 
 
 // 'BuildingInfo' demonstrates a type that inherits from a base class.

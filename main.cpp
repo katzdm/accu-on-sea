@@ -1,4 +1,5 @@
 // Standard C++ headers.
+#include <chrono>
 #include <clocale>
 #include <iostream>
 #include <print>
@@ -42,4 +43,13 @@ int main() {
   std::println();
 
   std::println("dump       : {}", univ::dump(esb));
+
+
+
+  auto t1 = std::chrono::system_clock::now();
+  for (int x = 0; x < 10000000; ++x)
+    (void) std::format("Building: {}", esb);
+  auto t2 = std::chrono::system_clock::now();
+
+  std::println("Delta: {}", (t2 - t1));
 }
