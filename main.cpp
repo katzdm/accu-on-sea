@@ -12,8 +12,30 @@
 #include "univ/dump.h"
 
 
+
+struct LinkedList {
+  static bool follow_next(const LinkedList &ll) {
+    return ll.next && !ll.next->first;
+  }
+
+  int k;
+  [[=univ::FollowIf(follow_next)]] LinkedList *next;
+  bool first = false;
+};
+template <> struct std::formatter<LinkedList> : univ::formatter {};
+
+
 int main() {
   setlocale(LC_CTYPE, "");
+
+
+  LinkedList a {1, nullptr, true};
+  LinkedList b {2, &a};
+  LinkedList c {3, &b};
+  LinkedList d {4, &c};
+  a.next = &d;
+  std::println("a: {}", a);
+
 
   MyCls m;
 

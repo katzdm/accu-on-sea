@@ -19,6 +19,20 @@ struct Subobject {
   size_t          Offset;
 };
 
+template <typename T>
+struct FollowIf {
+  using predicate_t = bool(*)(const T &);
+  predicate_t predicate;
+
+  constexpr FollowIf() = default;
+  constexpr FollowIf(predicate_t p) : predicate(p) {}
+};
+
+template <typename T>
+FollowIf(typename FollowIf<T>::predicate_t) -> FollowIf<T>;
+
+struct NoFollow {};
+
 constexpr auto access_cx = std::meta::access_context::unchecked();
 
 consteval bool is_universally_formattable(std::meta::info Ty) {
@@ -60,6 +74,17 @@ consteval std::basic_string_view<CharT> to_char_type(auto input) {
   return std::define_static_string(result);
 }
 
+consteval std::string_view label_of(std::meta::info R) {
+  if (is_base(R)) R = type_of(R);
+
+  if (is_type(R))
+    return has_identifier(R) ? identifier_of(R) : "(unnamed-type)";
+  else
+    return has_identifier(R) ? identifier_of(R) :
+                               is_bit_field(R) ? "(unnamed-bitfield)"
+                                               : "(unnamed-member)";
+}
+
 template <typename CharT>
 consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
   // HELPER LAMBDAS
@@ -69,17 +94,6 @@ consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
         std::from_range,
         std::views::join(std::vector<std::basic_string_view<CharT>>{ps...})
     };
-  };
-
-  auto label_of = [](std::meta::info so) {
-    if (is_base(so)) so = type_of(so);
-
-    if (is_type(so))
-      return has_identifier(so) ? identifier_of(so) : "(unnamed-type)";
-    else
-      return has_identifier(so) ? identifier_of(so) :
-                                  is_bit_field(so) ? "(unnamed-bitfield)"
-                                                   : "(unnamed-member)";
   };
 
   auto delim = [m=true]() mutable { return m ? (m = false, "") : ", "; };
@@ -155,10 +169,31 @@ consteval std::meta::info get_format_impl_r(std::meta::info ObjTy,
         constexpr typename std::formatter<pointee_t,
                                           typename CtxT::char_type>::formatter
             formatter;
-        if (so)
-          formatter.format(*so, cx);
-        else
-          out = to_char_type<typename CtxT::char_type>("(null)");
+        if constexpr (size(annotations_of_with_type(nso_info,
+                                                    ^^detail::NoFollow)) > 0) {
+          out = to_char_type<typename CtxT::char_type>(
+              label_of(type_of(nso_info)));
+        } else {
+          if (so) {
+            constexpr auto follow_if_ty = substitute(^^detail::FollowIf,
+                                                     {parent_of(nso_info)});
+            static constexpr auto follow_if_annots = define_static_array(
+                annotations_of_with_type(nso_info, follow_if_ty));
+            bool follow = true;
+            template for (constexpr std::meta::info annot : follow_if_annots) {
+              // Also needs parent offset to really do this right.
+              follow = follow && [:constant_of(annot):].predicate(obj);
+            }
+
+            if (follow)
+              formatter.format(*so, cx);
+            else
+              out = to_char_type<typename CtxT::char_type>(
+                  label_of(remove_pointer(type_of(nso_info))));
+          } else {
+            out = to_char_type<typename CtxT::char_type>("(null)");
+          }
+        }
       } else {
         constexpr typename std::formatter<SubobjTy,
                                           typename CtxT::char_type>::formatter
@@ -210,6 +245,9 @@ CtxT::iterator formatter::format(const ObjT& obj, CtxT& cx) const {
   static constexpr auto format_impl = &[:get_format_impl_r(^^ObjT, ^^CtxT):];
   return format_impl(obj, cx);
 }
+
+using ::univ::detail::FollowIf;
+using ::univ::detail::NoFollow;
 
 }  // namespace univ
 

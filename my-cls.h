@@ -13,6 +13,8 @@
 // file that provides the implementation of 'MyCls').
 
 class MyCls {
+  static bool follow_another(const MyCls &m) { return false; }
+
   struct another_t { int z = 0; int w = 1; };
 
   struct impl_t;
