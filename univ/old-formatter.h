@@ -1,5 +1,5 @@
-#ifndef UNIV_FORMATTER_OLD_H_
-#define UNIV_FORMATTER_OLD_H_
+#ifndef UNIV_OLD_FORMATTER_H_
+#define UNIV_OLD_FORMATTER_H_
 
 // Standard C++ headers.
 #include <algorithm>
@@ -23,7 +23,8 @@ struct old_formatter {
       if (parts.empty()) {
         pieces.insert(std::begin(pieces), "{");
         pieces.insert(std::begin(pieces),
-                      has_identifier(^^ObjT) ? identifier_of(^^ObjT) : "(unnamed-type)");
+                      has_identifier(^^ObjT) ? identifier_of(^^ObjT)
+                                             : "(unnamed-type)");
       }
 
       parts.push_back(std::define_static_string(std::views::join(pieces)));
@@ -38,7 +39,8 @@ struct old_formatter {
     };
 
     std::string nsdms_prefix;
-    template for (constexpr auto base : define_static_array(bases_of(^^ObjT, access_ctx))) {
+    template for (constexpr auto base :
+                  define_static_array(bases_of(^^ObjT, access_ctx))) {
       auto base_parts = format_parts<typename [:type_of(base):]>;
 
       add_part(delim(), base_parts[0]);
@@ -64,7 +66,8 @@ struct old_formatter {
                                      is_bit_field(mem) ? "(unnamed-bitfield)"
                                                        : "(unnamed-member)",
                "=",
-               maybe_quote(close_quote = (type_of(mem) == dealias(^^std::string))));
+               maybe_quote(close_quote = (type_of(mem) ==
+                                          dealias(^^std::string))));
         nsdms_prefix = "";
     }
     add_part(maybe_quote(close_quote), "}");
@@ -77,13 +80,15 @@ struct old_formatter {
     static constexpr std::span fixed_parts = format_parts<ObjT>;
 
     // Generic lambda forms a template for the printer.
-    static constexpr auto impl_tmpl = []<std::meta::info... Subobjs>(const ObjT& obj,
-                                                                     CtxT &cx) static {
+    static constexpr auto impl_tmpl =
+        []<std::meta::info... Subobjs>(const ObjT& obj, CtxT &cx) static {
       auto out = cx.out();
 
       out = fixed_parts[0];
-      template for (constexpr size_t k : std::views::iota(0u, sizeof...(Subobjs))) {
-        constexpr typename std::formatter<typename [:type_of(Subobjs...[k]):]>::formatter formatter;
+      template for (constexpr size_t k :
+                    std::views::iota(0u, sizeof...(Subobjs))) {
+        using SubobjTy = [:type_of(Subobjs...[k]):];
+        constexpr typename std::formatter<SubobjTy>::formatter formatter;
 
         formatter.format(obj.[:Subobjs...[k]:], cx);
         out = fixed_parts[k + 1];
@@ -92,15 +97,18 @@ struct old_formatter {
     };
 
     std::vector<std::meta::info> TArgs;
-    [&TArgs](this auto const& add_nsdms_from, std::meta::info Cls) consteval -> void {
+    [&TArgs](this auto const& add_nsdms_from,
+             std::meta::info Cls) consteval -> void {
       for (auto base : bases_of(Cls, access_ctx))
         add_nsdms_from(type_of(base));
-      std::ranges::copy(nonstatic_data_members_of(Cls, access_ctx) |
-                            std::views::transform(std::meta::reflect_constant<std::meta::info>),
-                        std::back_inserter(TArgs));
+      std::ranges::copy(
+          nonstatic_data_members_of(Cls, access_ctx) |
+              std::views::transform(
+                  std::meta::reflect_constant<std::meta::info>),
+          std::back_inserter(TArgs));
     }(^^ObjT);
 
-    // Substitute subobject reflections into the generic lambda and return the result.
+    // Substitute subobject reflections into eneric lambda and return result.
     return substitute(^^decltype(impl_tmpl)::template operator(), TArgs);
   }();
 
@@ -113,4 +121,4 @@ struct old_formatter {
 }  // namespace univ
 
 
-#endif  // UNIV_FORMATTER_OLD_H_
+#endif  // UNIV_OLD_FORMATTER_H_

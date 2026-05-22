@@ -13,10 +13,10 @@
 
 
 int main() {
-  setlocale(LC_CTYPE, "");
+  /*setlocale(LC_CTYPE, "");
 
   MyCls m;
-
+*/
   BuildingInfo esb {
       .address = "350 Fifth Avenue",
       .city    = "New York",
@@ -25,26 +25,25 @@ int main() {
       .year    = 1931,
   };
   esb.name = "Empire State Building";
-
+/*
   IntlAddress addr {
     .street       = L"Doctor Marañon Ibilbidea, 34",
     .municipality = L"San Sebastián",
     .country      = L"España",
   };
 
-  std::println("MyCls        :: {}", m);
-  std::println("BuildingInfo :: {}", esb);
-  std::wprintf(L"%S\n", std::format(L"Wide Address :: {}", addr).data());
+  std::println("fmt MyCls        :: {}", m);
+  std::println("fmt BuildingInfo :: {}", esb);
+  std::wprintf(L"%S\n", std::format(L"fmt Wide Address :: {}", addr).data());
   std::println();
   
 
-  std::println("dump       : {}", univ::dump(m));
-  MyCls::privileged_print(m);
+  std::println("dump              :: {}", univ::dump(m));
+  std::println("dump (privileged) :: {}", MyCls::privileged_dump(m));
   std::println();
 
   std::println("dump       : {}", univ::dump(esb));
-
-
+*/
 
   auto t1 = std::chrono::system_clock::now();
   for (int x = 0; x < 10000000; ++x)

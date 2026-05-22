@@ -27,16 +27,16 @@ consteval bool is_universally_formattable(std::meta::info Ty) {
       [](std::meta::info b) { return type_of(b) == ^^univ::formatter; });
 }
 
-consteval std::vector<Subobject> get_nested_objects(size_t offset,
-                                                    std::meta::info Ty) {
+consteval std::vector<Subobject> get_nested_objects(std::meta::info Ty,
+                                                    size_t offset = 0) {
   std::vector<Subobject> result;
   auto add_directly = [&result, offset](std::meta::info so) {
     result.push_back({so, offset + offset_of(so).bytes});
   };
   auto add_recursive_subobjects = [&](std::meta::info so) {
     result.insert_range(result.end(),
-                        get_nested_objects(offset + offset_of(so).bytes,
-                                           type_of(so)));
+                        get_nested_objects(type_of(so),
+                                           offset + offset_of(so).bytes));
   };
 
   for (auto so : subobjects_of(Ty, access_cx)) {
@@ -95,15 +95,14 @@ consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
       has_template_arguments(d) && template_of(d) == ^^std::basic_string) {
     affix(R"("|")");
   } else if (is_pointer_type(ObjTy)) {
-    affix("&", format_string<CharT>(remove_pointer(ObjTy)));
-  } else if (!is_universally_formattable(ObjTy) ||
-             !is_complete_type(ObjTy)) {
+    affix("&|");
+  } else if (!is_universally_formattable(ObjTy)) {
     affix("|");
   } else {
     affix(label_of(ObjTy), "{");
 
     std::basic_string<CharT> suffix;
-    if (is_class_type(ObjTy) && is_complete_type(ObjTy)) {
+    if (is_class_type(ObjTy)) {
       for (auto so : subobjects_of(ObjTy, access_cx)) {
         if (is_base(so)) {
           if (is_universally_formattable(type_of(so)))
@@ -125,17 +124,19 @@ consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
   return result;
 }
 
-template <typename ObjT, typename CtxT>
-consteval std::meta::info get_format_impl_r() {
-  static constexpr std::span fixed_parts = std::define_static_array(
-      format_string<typename CtxT::char_type>(^^ObjT) |
-      std::views::split(typename CtxT::char_type{'|'}) |
-      std::views::transform(
-          [](auto piece) { return std::define_static_string(piece); }));
-
+consteval std::meta::info get_format_impl_r(std::meta::info ObjTy,
+                                            std::meta::info CtxTy) {
   // Generic lambda forms a template for the printer.
-  constexpr auto tmpl = []<Subobject... Subobjs>(const ObjT& obj,
+  constexpr auto tmpl = []<typename ObjT,
+                           typename CtxT,
+                           Subobject... Subobjs>(const ObjT& obj,
                                                  CtxT &cx) static {
+    static constexpr std::span fixed_parts = std::define_static_array(
+        format_string<typename CtxT::char_type>(^^ObjT) |
+        std::views::split(typename CtxT::char_type{'|'}) |
+        std::views::transform(
+            [](auto piece) { return std::define_static_string(piece); }));
+
     auto out = cx.out();
 
     out = fixed_parts[0];
@@ -143,6 +144,7 @@ consteval std::meta::info get_format_impl_r() {
                   std::views::iota(0u, sizeof...(Subobjs))) {
       constexpr std::meta::info nso_info = Subobjs...[k].Info;
       constexpr size_t nso_offset = Subobjs...[k].Offset;
+
       using SubobjTy = [:type_of(nso_info):];
       const SubobjTy &so = reinterpret_cast<const SubobjTy &>(
           *(reinterpret_cast<const char *>(&obj) + nso_offset));
@@ -164,11 +166,14 @@ consteval std::meta::info get_format_impl_r() {
     return out;
   };
 
+  std::vector TArgs = {ObjTy, CtxTy};
+  TArgs.insert_range(
+      TArgs.end(),
+      get_nested_objects(ObjTy) |
+          std::views::transform(std::meta::reflect_constant<Subobject>));
+
   // Substitute subobject reflections into 'tmpl' and return the result.
-  return substitute(^^decltype(tmpl)::template operator(),
-                    get_nested_objects(0, ^^ObjT) |
-                        std::views::transform(
-                            std::meta::reflect_constant<Subobject>));
+  return substitute(^^decltype(tmpl)::template operator(), TArgs);
 };
 
 
@@ -199,7 +204,7 @@ template <typename ObjT, typename CtxT>
 CtxT::iterator formatter::format(const ObjT& obj, CtxT& cx) const {
   using namespace ::univ::detail;
 
-  static constexpr auto format_impl = &[:get_format_impl_r<ObjT, CtxT>():];
+  static constexpr auto format_impl = &[:get_format_impl_r(^^ObjT, ^^CtxT):];
   return format_impl(obj, cx);
 }
 

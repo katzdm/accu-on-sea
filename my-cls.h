@@ -13,23 +13,26 @@
 // file that provides the implementation of 'MyCls').
 
 class MyCls {
+  struct another_t { int z = 0; int w = 1; };
+
   struct impl_t;
   impl_t *impl;
+  another_t *another = new another_t{};
 
 public:
   MyCls();
   ~MyCls();
 
   // A static member function whose implementation can reach the definition of
-  // 'MyCls::impl_t'. A call to 'dump(m)' invokes a specialization of 'dump'
-  // that is able to print 'impl'; a separate call to 'dump(m)' in 'main.cpp'
-  // is not able to reach the definition of 'MyCls::impl_t', so it prints a
-  // token placeholder in lieu of introspecting 'impl'.
+  // 'MyCls::impl_t'. Returns 'dump(m)', which invokes a specialization that is
+  // able to print 'impl'; a separate call to 'dump(m)' in 'main.cpp' is not
+  // able to reach the definition of 'MyCls::impl_t', so it renders a token
+  // placeholder in lieu of introspecting 'impl'.
   //
   // The specializations invoked by these two calls to 'dump(m)' are distinct,
   // so there is no ODR-violation: the specialization chosen by template
   // argument deduction is sensitive to the context in which the call appears.
-  static void privileged_print(const MyCls &m);
+  static auto privileged_dump(const MyCls &m) -> std::string;
 };
 
 
@@ -38,6 +41,9 @@ public:
 
 template <typename CharT>
 struct std::formatter<MyCls, CharT> : univ::formatter { };
+
+template <typename CharT>
+struct std::formatter<MyCls::another_t, CharT> : univ::formatter { };
 
 template <typename CharT>
 struct std::formatter<MyCls::impl_t, CharT> : univ::formatter { };

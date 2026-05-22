@@ -7,14 +7,14 @@
 #include "univ/dump.h"
 
 
-struct MyCls::impl_t { int k = 0; };
+struct MyCls::impl_t { int x = 0; int y = 1; };
 
 MyCls::MyCls() : impl(new impl_t{}) {}
 MyCls::~MyCls() { delete impl; }
 
 // See comments in 'my-cls.h'
-void MyCls::privileged_print(const MyCls &m) {
-    std::println("dump (impl): {}", univ::dump(m));
+auto MyCls::privileged_dump(const MyCls &m) -> std::string {
+    return univ::dump(m);
 }
 
 
