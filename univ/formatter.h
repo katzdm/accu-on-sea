@@ -50,17 +50,18 @@ consteval std::vector<Subobject> get_nested_objects(std::meta::info Ty,
 }
 
 template <typename CharT>
+consteval std::basic_string_view<CharT> to_char_type(auto input) {
+  std::basic_string_view contents {input};
+
+  std::basic_string<CharT> result(contents.size(), 0);
+  for (size_t idx = 0; auto c : std::basic_string_view{contents})
+    result[idx++] = CharT{c};
+
+  return std::define_static_string(result);
+}
+
+template <typename CharT>
 consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
-  static constexpr auto maybe_utf8 = [](auto input) consteval {
-    std::basic_string_view contents {input};
-
-    std::basic_string<CharT> result(contents.size(), 0);
-    for (size_t idx = 0; auto c : std::basic_string_view{contents})
-      result[idx++] = CharT{c};
-
-    return std::define_static_string(result);
-  };
-
   // HELPER LAMBDAS
 
   auto join = [](auto... ps) -> std::basic_string<CharT> {
@@ -87,7 +88,7 @@ consteval std::basic_string<CharT> format_string(std::meta::info ObjTy) {
 
   std::basic_string<CharT> result;
   auto affix = [&result, join](auto... ps) -> void {
-    std::ranges::copy(join(maybe_utf8(ps)...),
+    std::ranges::copy(join(to_char_type<CharT>(ps)...),
                       std::back_inserter(result));
   };
 
@@ -154,7 +155,10 @@ consteval std::meta::info get_format_impl_r(std::meta::info ObjTy,
         constexpr typename std::formatter<pointee_t,
                                           typename CtxT::char_type>::formatter
             formatter;
-        formatter.format(*so, cx);
+        if (so)
+          formatter.format(*so, cx);
+        else
+          out = to_char_type<typename CtxT::char_type>("(null)");
       } else {
         constexpr typename std::formatter<SubobjTy,
                                           typename CtxT::char_type>::formatter
@@ -175,7 +179,6 @@ consteval std::meta::info get_format_impl_r(std::meta::info ObjTy,
   // Substitute subobject reflections into 'tmpl' and return the result.
   return substitute(^^decltype(tmpl)::template operator(), TArgs);
 };
-
 
 }  // namespace detail
 

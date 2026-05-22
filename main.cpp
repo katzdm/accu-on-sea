@@ -13,10 +13,10 @@
 
 
 int main() {
-  /*setlocale(LC_CTYPE, "");
+  setlocale(LC_CTYPE, "");
 
   MyCls m;
-*/
+
   BuildingInfo esb {
       .address = "350 Fifth Avenue",
       .city    = "New York",
@@ -25,7 +25,7 @@ int main() {
       .year    = 1931,
   };
   esb.name = "Empire State Building";
-/*
+
   IntlAddress addr {
     .street       = L"Doctor Marañon Ibilbidea, 34",
     .municipality = L"San Sebastián",
@@ -43,12 +43,12 @@ int main() {
   std::println();
 
   std::println("dump       : {}", univ::dump(esb));
-*/
 
-  auto t1 = std::chrono::system_clock::now();
+
+  /*auto t1 = std::chrono::system_clock::now();
   for (int x = 0; x < 10000000; ++x)
     (void) std::format("Building: {}", esb);
   auto t2 = std::chrono::system_clock::now();
 
-  std::println("Delta: {}", (t2 - t1));
+  std::println("Delta: {}", (t2 - t1));*/
 }
